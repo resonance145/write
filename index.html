@@ -166,6 +166,8 @@ select.font{max-width:150px}
 .prose .pic img.w100{width:100%}
 .prose .pic img.w60{width:60%}
 .prose .pic img.w35{width:35%}
+.prose .pic img.orig{width:auto; max-width:100%; height:auto}
+.ed .pic img.orig{max-height:80vh}
 .prose img.picked{outline:3px solid var(--accent); outline-offset:2px}
 .indent p:not(.pic):not(.divider):not([style*="center"]){text-indent:1em}
 
@@ -351,12 +353,13 @@ body.focus{padding-block:42px 12px}
   </aside>
 </div>
 
-<input type="file" id="fileIn" accept="image/*" hidden>
+<input type="file" id="fileIn" accept="image/*" multiple hidden>
 <input type="file" id="bkIn" accept=".json,application/json" hidden>
 <div class="picbar" id="picbar" hidden>
   <button type="button" data-w="w35">작게</button>
   <button type="button" data-w="w60">중간</button>
   <button type="button" data-w="w100">꽉 차게</button>
+  <button type="button" data-w="orig">원본 크기</button>
   <button type="button" data-act="del">삭제</button>
 </div>
 
@@ -366,6 +369,8 @@ body.focus{padding-block:42px 12px}
   <label class="sw"><span>첫 줄 들여쓰기<small>문단 첫 줄을 한 칸 들여요. 이미지 저장에도 적용</small></span><input type="checkbox" data-opt="indent"></label>
   <label class="sw"><span>타자기 스크롤<small>쓰는 줄을 늘 화면 가운데에 둬요</small></span><input type="checkbox" data-opt="typewriter"></label>
   <label class="sw"><span>지금 문단만 진하게<small>나머지 문단은 흐리게 보여요</small></span><input type="checkbox" data-opt="dim"></label>
+  <span class="lbl" style="border-top:1px solid var(--line); padding-top:10px">심화</span>
+  <label class="sw"><span>그림 원본 그대로 넣기<small>줄이지 않고 원래 크기·화질로 넣어요. 칸보다 크면 칸 안에 맞춰요</small></span><input type="checkbox" data-opt="origImg"></label>
   <div class="group"><span class="lbl">종이</span>
     <div class="seg" id="paperSeg">
       <button type="button" data-p="theme">기본</button>
@@ -871,15 +876,27 @@ function shrinkImage(file){
     r.onerror = rej; r.readAsDataURL(file);
   });
 }
-async function insertImageFile(i, file){
-  try{
-    const src = await shrinkImage(file);
-    restore(i); ensureBlocks(edOf(i));
-    insertBlock(edOf(i), `<p class="pic"><img src="${src}" class="w60" alt=""></p>`);
-    refresh(i); toast('그림을 넣었어요. 그림을 누르면 크기를 바꿀 수 있어요');
-  }catch(e){ toast('그림을 읽지 못했어요. 다른 파일로 해 보세요'); }
+function readDataUrl(file){
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 }
-$id('fileIn').addEventListener('change', e => { const f = e.target.files[0]; if (f) insertImageFile(+e.target.dataset.pane, f); e.target.value = ''; });
+async function insertImageFiles(i, files){
+  files = files.filter(f => f && f.type && f.type.startsWith('image/'));
+  if (!files.length) return;
+  const orig = !!meta.origImg;
+  const blocks = []; let failed = 0;
+  for (const f of files){
+    try{
+      const src = orig ? await readDataUrl(f) : await shrinkImage(f);
+      blocks.push(`<p class="pic"><img src="${src}" class="${orig ? 'orig' : 'w60'}" alt=""></p>`);
+    }catch(e){ failed++; }
+  }
+  if (!blocks.length){ toast('그림을 읽지 못했어요. 다른 파일로 해 보세요'); return; }
+  restore(i); ensureBlocks(edOf(i));
+  insertBlock(edOf(i), blocks.join(''));
+  refresh(i);
+  toast(`${blocks.length > 1 ? `그림 ${blocks.length}개를` : '그림을'} 넣었어요${failed ? ` (${failed}개는 읽지 못했어요)` : ''}. 그림을 누르면 크기를 바꿀 수 있어요`);
+}
+$id('fileIn').addEventListener('change', e => { const fs = [...e.target.files]; if (fs.length) insertImageFiles(+e.target.dataset.pane, fs); e.target.value = ''; });
 
 const picbar = $id('picbar'); let pickedImg = null, pickedPane = 0;
 function showPicbar(img, i){
@@ -895,7 +912,7 @@ picbar.addEventListener('mousedown', e => e.preventDefault());
 picbar.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || !pickedImg) return; const i = pickedPane;
   if (b.dataset.act === 'del'){ (pickedImg.closest('.pic') || pickedImg).remove(); hidePicbar(); refresh(i); toast('그림을 지웠어요'); return; }
-  pickedImg.classList.remove('w35','w60','w100'); pickedImg.classList.add(b.dataset.w);
+  pickedImg.classList.remove('w35','w60','w100','orig'); pickedImg.classList.add(b.dataset.w);
   const img = pickedImg; refresh(i); showPicbar(img, i);
 });
 document.addEventListener('mousedown', e => { if (!picbar.hidden && !picbar.contains(e.target) && e.target !== pickedImg) hidePicbar(); });
@@ -928,16 +945,16 @@ function bindPane(i){
   ed.addEventListener('scroll', () => { if (!picbar.hidden && pickedPane === i) hidePicbar(); });
   ed.addEventListener('paste', e => {
     const cd = e.clipboardData; if (!cd) return;
-    const file = [...cd.items].find(it => it.kind === 'file' && it.type.startsWith('image/'));
+    const files = [...cd.items].filter(it => it.kind === 'file' && it.type.startsWith('image/')).map(it => it.getAsFile());
     e.preventDefault();
-    if (file){ remember(i); insertImageFile(i, file.getAsFile()); return; }
+    if (files.length){ remember(i); insertImageFiles(i, files); return; }
     let t = (cd.getData('text/plain') || '').replace(/\r\n?/g, '\n');
     if (meta.ellipsis) t = t.replace(/\.{3}/g, '⋯');
     if (t) document.execCommand('insertText', false, t);
   });
   ed.addEventListener('drop', e => {
-    const f = e.dataTransfer && [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
-    if (f){ e.preventDefault(); remember(i); insertImageFile(i, f); }
+    const fs = e.dataTransfer ? [...e.dataTransfer.files].filter(f => f.type.startsWith('image/')) : [];
+    if (fs.length){ e.preventDefault(); remember(i); insertImageFiles(i, fs); }
   });
 
   const deco = $id('deco'+i);
@@ -1065,7 +1082,7 @@ function docToHtml(d){
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(d.name)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(d.font).replace(/%20/g,'+')}&display=swap">
 <style>body{margin:0;background:#F5F0E1;color:#2B2722}main{max-width:720px;margin:0 auto;padding:56px 24px;font-family:${stack(d.font)};font-size:${d.size}px;line-height:${d.lh};white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;--rule:rgba(43,39,34,.24);--tint:rgba(120,90,40,.06)}
-p,div{margin:0}blockquote{margin:.6em 0;padding:.35em 0 .35em 1em;border-left:3px solid var(--rule)}.letter{margin:.8em 0;padding:1em 1.2em;border:1px solid var(--rule);background:var(--tint)}.divider{text-align:center;letter-spacing:.4em;margin:1em 0;opacity:.7}hr{border:0;border-top:1px solid var(--rule);width:40%;margin:1.4em auto}.faint{opacity:.5}.small{font-size:.82em}.big{font-size:1.3em}.pic{text-align:center;margin:.8em 0}.pic img{max-width:100%}.w100{width:100%}.w60{width:60%}.w35{width:35%}.indent p:not(.pic):not(.divider):not([style*="center"]){text-indent:1em}</style></head>
+p,div{margin:0}blockquote{margin:.6em 0;padding:.35em 0 .35em 1em;border-left:3px solid var(--rule)}.letter{margin:.8em 0;padding:1em 1.2em;border:1px solid var(--rule);background:var(--tint)}.divider{text-align:center;letter-spacing:.4em;margin:1em 0;opacity:.7}hr{border:0;border-top:1px solid var(--rule);width:40%;margin:1.4em auto}.faint{opacity:.5}.small{font-size:.82em}.big{font-size:1.3em}.pic{text-align:center;margin:.8em 0}.pic img{max-width:100%}.w100{width:100%}.w60{width:60%}.w35{width:35%}.orig{width:auto;max-width:100%}.indent p:not(.pic):not(.divider):not([style*="center"]){text-indent:1em}</style></head>
 <body><main${ind}>${d.html}</main></body></html>`;
 }
 let dlApi;
