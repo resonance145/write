@@ -22,16 +22,7 @@
   --danger:#A23B2E;
   --f-display:"Hahmlet","Noto Serif KR",serif;
   --f-ui:"IBM Plex Sans KR","Noto Sans KR",system-ui,sans-serif;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --desk:#14181A; --paper:#1D2326; --ink:#E2E5E0; --muted:#939C99; --line:#30393C;
-    --accent:#93ABDA; --accent-ink:#0E1420; --soft:#232A2D; --danger:#E28A7C; color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --desk:#14181A; --paper:#1D2326; --ink:#E2E5E0; --muted:#939C99; --line:#30393C;
-  --accent:#93ABDA; --accent-ink:#0E1420; --soft:#232A2D; --danger:#E28A7C; color-scheme:dark;
+  color-scheme:light;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -103,9 +94,9 @@ select.font{max-width:180px}
 }
 .sheet textarea{
   flex:none; display:block; border:0; resize:vertical; background:transparent; color:inherit;
-  padding:18px 34px 28px; width:100%;
+  padding:26px 34px 28px; width:100%;
   min-height:420px;
-  height:calc(100vh - 230px);
+  height:calc(100vh - 175px);
   word-break:keep-all; overflow-wrap:anywhere; outline-offset:-4px;
 }
 .sheet ::placeholder{color:color-mix(in srgb, var(--pi) 40%, transparent)}
@@ -114,6 +105,17 @@ select.font{max-width:180px}
   font-variant-numeric:tabular-nums; padding-inline:4px;
 }
 .stats b{color:var(--ink); font-weight:600}
+
+/* 집중 모드: 위쪽 도구를 숨기고 글 칸을 키웁니다 */
+body.focus .bar, body.focus .pane-tools{display:none}
+body.focus{padding-block:14px 16px}
+body.focus .sheet textarea{height:calc(100vh - 75px)}
+.floatbtn{
+  position:fixed; z-index:6;
+  top:calc(10px + env(safe-area-inset-top,0px)); right:calc(12px + env(safe-area-inset-right,0px));
+  opacity:.5; font-size:12px; padding:5px 10px;
+}
+.floatbtn:hover, .floatbtn:focus-visible{opacity:1}
 
 /* 이미지 창 */
 .modal{position:fixed; inset:0; z-index:20; background:rgba(10,14,16,.55); display:flex; align-items:flex-start; justify-content:center; overflow:auto;
@@ -161,7 +163,9 @@ select.font{max-width:180px}
     </div>
   </div>
   <button type="button" class="btn primary" id="imgBtn">이미지로 저장</button>
+  <button type="button" class="btn" id="hideBtn" title="위쪽 도구를 숨기고 글 칸을 크게 봅니다">도구 숨기기</button>
 </header>
+<button type="button" class="btn floatbtn" id="showBtn" hidden title="숨긴 도구를 다시 보여 줍니다">도구 보이기</button>
 
 <main class="desk" id="desk" data-view="both" data-paper="theme"></main>
 
@@ -202,10 +206,8 @@ const fontGroupOf = f => (FONTS.find(([,l]) => l.some(([n]) => n===f)) || ["명�
 const stack = f => `"${f}", ${GENERIC[fontGroupOf(f)]}`;
 
 const SAMPLES = [
-  { title:"예시 · 1장 소금창고", font:"Gowun Batang", size:17, lh:1.9,
-    text:"새벽 네 시, 소금창고의 문은 늘 반쯤 열려 있었다.\n\n해원은 젖은 장화를 벗어 문턱에 세워 두고 안으로 들어갔다. 쌓아 둔 소금 자루 사이로 바다 냄새가 낮게 깔렸다. 아버지가 마지막으로 이 창고에 들른 날도 이런 냄새였을 것이다.\n\n“누구 있어요?”\n\n대답 대신 천장에서 무언가 바스락거렸다. 해원은 손전등을 들어 올렸다. 빛이 닿은 들보 위에 작은 공책 한 권이 끼워져 있었다. 표지에는 아버지의 글씨로 날짜 하나만 적혀 있었다. 1998년 7월 14일.\n\n그날은 해원이 태어나기 사흘 전이었다." },
-  { title:"예시 · 인물 노트", font:"Gowun Batang", size:17, lh:1.9,
-    text:"■ 한해원 (29)\n- 서울에서 번역 일을 하다 아버지 장례 때문에 염전 마을로 돌아옴\n- 말수가 적고, 불안하면 숫자를 센다\n- 원하는 것: 아버지가 왜 염전을 팔지 않았는지 알고 싶다\n\n■ 도 선장 (63)\n- 아버지의 오랜 친구. 공책의 존재를 이미 알고 있다\n- 해원에게 친절하지만 7월 이야기만 나오면 자리를 피함\n\n■ 떡밥 정리\n- 1998.7.14 → 태풍 '예니' 상륙일?\n- 창고 열쇠는 원래 두 개였다\n- 3장에서 공책 첫 장 공개" },
+  { title:"", font:"Gowun Batang", size:17, lh:1.9, text:"" },
+  { title:"", font:"Gowun Batang", size:17, lh:1.9, text:"" },
 ];
 
 let state = loadState();
@@ -260,7 +262,6 @@ function render(){
         <button type="button" class="btn" id="clear${i}">비우기</button>
       </div>
       <div class="sheet">
-        <input class="title" id="title${i}" type="text" placeholder="제목 또는 장 이름" value="${escapeAttr(p.title)}">
         <textarea id="text${i}" spellcheck="false" placeholder="여기에 쓰거나 붙여넣으세요 (Ctrl+V / ⌘V)">${escapeHtml(p.text)}</textarea>
       </div>
       <div class="stats" id="stats${i}"></div>
@@ -274,11 +275,10 @@ function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
 
 function applyStyle(i){
   const p = state.panes[i];
-  const ta = document.getElementById('text'+i), ti = document.getElementById('title'+i);
-  ta.style.fontFamily = ti.style.fontFamily = stack(p.font);
+  const ta = document.getElementById('text'+i);
+  ta.style.fontFamily = stack(p.font);
   ta.style.fontSize = p.size + 'px';
   ta.style.lineHeight = p.lh;
-  ti.style.fontSize = Math.round(p.size * 1.35) + 'px';
 }
 function updateStats(i){
   const s = countStats(state.panes[i].text);
@@ -290,16 +290,15 @@ function bindPane(i){
   const p = state.panes[i];
   const $ = id => document.getElementById(id+i);
   $('text').addEventListener('input', e => { p.text = e.target.value; updateStats(i); save(); });
-  $('title').addEventListener('input', e => { p.title = e.target.value; save(); });
   $('font').addEventListener('change', e => { p.font = e.target.value; applyStyle(i); save(); });
   $('size').addEventListener('input', e => { p.size = +e.target.value; $('sizeOut').textContent = p.size+'px'; applyStyle(i); save(); });
   $('lh').addEventListener('change', e => { p.lh = +e.target.value; applyStyle(i); save(); });
   $('copy').addEventListener('click', () => {
     const ta = $('text');
-    const txt = (p.title ? p.title + '\n\n' : '') + p.text;
+    const txt = p.text;
     const fallback = () => { ta.focus(); ta.select(); toast('본문을 선택했어요. Ctrl+C로 복사하세요'); };
     if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).then(() => toast('제목과 본문을 복사했어요'), fallback);
+      navigator.clipboard.writeText(txt).then(() => toast('본문을 복사했어요'), fallback);
     } else fallback();
   });
   let armed = null;
@@ -311,8 +310,8 @@ function bindPane(i){
       return;
     }
     clearTimeout(armed); armed=null;
-    p.text=''; p.title='';
-    $('text').value=''; $('title').value='';
+    p.text='';
+    $('text').value='';
     b.textContent='비우기'; b.classList.remove('warn');
     updateStats(i); save(); $('text').focus();
   });
@@ -328,6 +327,12 @@ document.getElementById('paperSeg').addEventListener('click', e => {
   desk.dataset.paper = state.paper;
   document.querySelectorAll('#paperSeg button').forEach(x => x.setAttribute('aria-pressed', x===b));
 });
+function applyFocus(){
+  document.body.classList.toggle('focus', !!state.focus);
+  document.getElementById('showBtn').hidden = !state.focus;
+}
+document.getElementById('hideBtn').addEventListener('click', () => { state.focus = true; save(); applyFocus(); });
+document.getElementById('showBtn').addEventListener('click', () => { state.focus = false; save(); applyFocus(); });
 document.getElementById('swapBtn').addEventListener('click', () => {
   state.panes.reverse(); save(); render(); toast('두 원고의 자리를 바꿨어요');
 });
@@ -407,7 +412,7 @@ async function buildImage(){
       ]);
     }catch(e){}
     meas.font = `700 ${tSize}px ${fam}`;
-    const tLines = p.title.trim() ? wrapText(meas, p.title.trim(), W - PAD*2) : [];
+    const tLines = [];
     meas.font = `${p.size}px ${fam}`;
     const bLines = wrapText(meas, p.text.replace(/\s+$/,''), W - PAD*2);
     const lineH = p.size * p.lh, tLineH = tSize * 1.35;
@@ -474,6 +479,7 @@ document.getElementById('copyImgBtn').addEventListener('click', () => {
 });
 
 render();
+applyFocus();
 </script>
 </body>
 </html>
