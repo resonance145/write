@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>두 칸 원고실</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Gowun+Batang:wght@400;700&family=Hahmlet:wght@400;700&family=Song+Myung&family=Diphylleia&family=Noto+Sans+KR:wght@400;700&family=Nanum+Gothic:wght@400;700&family=Gowun+Dodum&family=IBM+Plex+Sans+KR:wght@400;600&family=Gothic+A1:wght@400;700&family=Sunflower:wght@300;700&family=Orbit&family=Nanum+Gothic+Coding:wght@400;700&family=Nanum+Pen+Script&family=Gaegu:wght@400;700&family=Hi+Melody&family=Gamja+Flower&family=Poor+Story&family=Single+Day&family=Nanum+Brush+Script&family=East+Sea+Dokdo&family=Yeon+Sung&family=Cute+Font&family=Jua&family=Do+Hyeon&family=Black+Han+Sans&family=Gugi&family=Dongle:wght@400;700&family=Stylish&display=swap">
+<style>
+/* Layout: 책상(desk) 위에 원고지 두 장을 나란히 펼친 작업대. 상단 도구줄 하나, 아래 두 칸. */
+:root{
+  --desk:#E3E6E0;
+  --paper:#FBFBF7;
+  --ink:#1E2629;
+  --muted:#636D6B;
+  --line:#CBD1CA;
+  --accent:#2E4877;
+  --accent-ink:#FFFFFF;
+  --soft:#EEF0EB;
+  --danger:#A23B2E;
+  --f-display:"Hahmlet","Noto Serif KR",serif;
+  --f-ui:"IBM Plex Sans KR","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --desk:#14181A; --paper:#1D2326; --ink:#E2E5E0; --muted:#939C99; --line:#30393C;
+    --accent:#93ABDA; --accent-ink:#0E1420; --soft:#232A2D; --danger:#E28A7C; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --desk:#14181A; --paper:#1D2326; --ink:#E2E5E0; --muted:#939C99; --line:#30393C;
+  --accent:#93ABDA; --accent-ink:#0E1420; --soft:#232A2D; --danger:#E28A7C; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{
+  background:var(--desk); color:var(--ink); font-family:var(--f-ui); font-size:14px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:0 24px;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--desk)}
+
+/* 도구줄 */
+.bar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:5; background:var(--desk);
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; padding-block:14px 12px;
+  border-bottom:1px solid var(--line); margin-bottom:16px;
+}
+.brand{display:flex; align-items:baseline; gap:10px; margin-right:auto}
+.brand h1{font-family:var(--f-display); font-weight:700; font-size:22px; margin:0; letter-spacing:-0.01em}
+.brand span{color:var(--muted); font-size:12.5px}
+.group{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.group > .lbl{font-size:11.5px; color:var(--muted); letter-spacing:.04em; margin-right:2px}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden; background:var(--paper)}
+.seg button{border:0; background:transparent; color:var(--ink); font:inherit; font-size:13px; padding:6px 10px; cursor:pointer}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--paper)}
+.btn{
+  font:inherit; font-size:13px; border:1px solid var(--line); background:var(--paper); color:var(--ink);
+  padding:6px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;
+}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600}
+.btn.warn{color:var(--danger); border-color:var(--danger)}
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* 두 칸 */
+.desk{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+.desk[data-view="left"]{grid-template-columns:1fr}
+.desk[data-view="left"] .pane[data-i="1"], .desk[data-view="right"] .pane[data-i="0"]{display:none}
+.desk[data-view="right"]{grid-template-columns:1fr}
+.desk[data-view="left"] .sheet, .desk[data-view="right"] .sheet{max-width:860px; margin-inline:auto; width:100%}
+.pane{display:flex; flex-direction:column; gap:8px; min-width:0}
+.pane-tools{display:flex; flex-wrap:wrap; align-items:center; gap:6px}
+.pane-tag{font-family:var(--f-display); font-weight:700; font-size:13px; color:var(--accent); min-width:1.6em}
+select, .num{
+  font:inherit; font-size:13px; color:var(--ink); background:var(--paper);
+  border:1px solid var(--line); border-radius:7px; padding:5px 8px;
+}
+select.font{max-width:180px}
+.size{display:inline-flex; align-items:center; gap:4px; font-size:12.5px; color:var(--muted)}
+.size input[type=range]{width:84px; accent-color:var(--accent)}
+.size output{font-variant-numeric:tabular-nums; color:var(--ink); min-width:2.4em}
+.spacer{flex:1}
+
+.sheet{
+  --pp:var(--paper); --pi:var(--ink);
+  background:var(--pp); color:var(--pi);
+  border:1px solid var(--line); border-radius:4px;
+  box-shadow:0 1px 0 var(--line), 0 10px 30px -18px rgba(0,0,0,.35);
+  display:flex; flex-direction:column; min-width:0;
+}
+.desk[data-paper="ivory"] .sheet{--pp:#F5F0E1; --pi:#2B2722; color-scheme:light}
+.desk[data-paper="white"] .sheet{--pp:#FFFFFF; --pi:#1C1D1F; color-scheme:light}
+.desk[data-paper="ink"] .sheet{--pp:#1C1F22; --pi:#E7E3D9; color-scheme:dark}
+.sheet input.title{
+  border:0; background:transparent; color:inherit; font-weight:700;
+  padding:22px 34px 10px; width:100%; outline-offset:-4px;
+  border-bottom:1px dashed color-mix(in srgb, var(--pi) 22%, transparent);
+}
+.sheet textarea{
+  flex:none; display:block; border:0; resize:vertical; background:transparent; color:inherit;
+  padding:18px 34px 28px; width:100%;
+  min-height:420px;
+  height:calc(100vh - 230px);
+  word-break:keep-all; overflow-wrap:anywhere; outline-offset:-4px;
+}
+.sheet ::placeholder{color:color-mix(in srgb, var(--pi) 40%, transparent)}
+.stats{
+  display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--muted);
+  font-variant-numeric:tabular-nums; padding-inline:4px;
+}
+.stats b{color:var(--ink); font-weight:600}
+
+/* 이미지 창 */
+.modal{position:fixed; inset:0; z-index:20; background:rgba(10,14,16,.55); display:flex; align-items:flex-start; justify-content:center; overflow:auto;
+  padding:max(24px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) 24px max(16px, env(safe-area-inset-left,0px))}
+.dialog{background:var(--paper); color:var(--ink); border-radius:10px; width:min(760px, 100%); padding:20px; display:flex; flex-direction:column; gap:14px; border:1px solid var(--line)}
+.dialog h2{font-family:var(--f-display); margin:0; font-size:19px}
+.dialog .row{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center}
+.preview{background:var(--soft); border-radius:8px; padding:12px; max-height:60vh; overflow:auto; display:flex; justify-content:center}
+.preview img{max-width:100%; height:auto; display:block; box-shadow:0 6px 20px -12px rgba(0,0,0,.5)}
+.hint{font-size:12.5px; color:var(--muted); margin:0; line-height:1.6}
+.msg{font-size:12.5px; color:var(--accent); min-height:1.2em; margin:0}
+
+.toast{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--ink); color:var(--paper); padding:8px 14px; border-radius:20px; font-size:13px; z-index:30}
+
+@media (max-width:820px){
+  .desk{grid-template-columns:1fr}
+  .desk[data-view="both"] .pane{display:flex}
+  .sheet textarea{height:70vh; min-height:360px; padding-inline:20px}
+  .sheet input.title{padding-inline:20px}
+  .bar{position:static}
+}
+@media (prefers-reduced-motion:no-preference){ .btn, .seg button{transition:background .15s, border-color .15s} }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><h1>두 칸 원고실</h1><span>원고 두 장을 나란히 두고 쓰는 소설 작업대</span></div>
+  <div class="group" role="group" aria-label="보기">
+    <span class="lbl">보기</span>
+    <div class="seg" id="viewSeg">
+      <button type="button" data-v="both" aria-pressed="true">두 칸</button>
+      <button type="button" data-v="left">왼쪽만</button>
+      <button type="button" data-v="right">오른쪽만</button>
+    </div>
+    <button type="button" class="btn" id="swapBtn" title="두 원고의 자리를 바꿉니다">좌우 바꾸기</button>
+  </div>
+  <div class="group" role="group" aria-label="종이">
+    <span class="lbl">종이</span>
+    <div class="seg" id="paperSeg">
+      <button type="button" data-p="theme" aria-pressed="true">기본</button>
+      <button type="button" data-p="ivory">미색</button>
+      <button type="button" data-p="white">흰색</button>
+      <button type="button" data-p="ink">먹색</button>
+    </div>
+  </div>
+  <button type="button" class="btn primary" id="imgBtn">이미지로 저장</button>
+</header>
+
+<main class="desk" id="desk" data-view="both" data-paper="theme"></main>
+
+<div class="modal" id="modal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="dlgTitle">이미지로 저장</h2>
+      <button type="button" class="btn" id="closeBtn">닫기</button>
+    </div>
+    <div class="row">
+      <div class="group"><span class="lbl">대상</span>
+        <div class="seg" id="targetSeg">
+          <button type="button" data-t="0" aria-pressed="true">왼쪽 원고</button>
+          <button type="button" data-t="1">오른쪽 원고</button>
+          <button type="button" data-t="both">두 장 나란히</button>
+        </div>
+      </div>
+      <label class="size"><input type="checkbox" id="footChk" checked> 글자수 표시</label>
+    </div>
+    <div class="preview" id="preview"><p class="hint">만드는 중…</p></div>
+    <p class="hint">컴퓨터에서는 이미지를 <b>우클릭 → 이미지를 다른 이름으로 저장</b>, 휴대폰에서는 이미지를 <b>길게 눌러 저장</b>하세요. 종이 색과 폰트는 지금 화면 설정을 그대로 따릅니다.</p>
+    <div class="row">
+      <button type="button" class="btn primary" id="copyImgBtn">이미지 복사</button>
+      <p class="msg" id="imgMsg"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+const FONTS = [
+  ["명조 · 바탕", [["Noto Serif KR","본명조"],["Nanum Myeongjo","나눔명조"],["Gowun Batang","고운바탕"],["Hahmlet","함렛"],["Song Myung","송명"],["Diphylleia","산유화"]]],
+  ["고딕 · 돋움", [["Noto Sans KR","본고딕"],["Nanum Gothic","나눔고딕"],["Gowun Dodum","고운돋움"],["IBM Plex Sans KR","IBM 플렉스 산스"],["Gothic A1","고딕 A1"],["Sunflower","해바라기"],["Orbit","오르빗"],["Nanum Gothic Coding","나눔고딕코딩 (타자기)"]]],
+  ["손글씨", [["Nanum Pen Script","나눔손글씨 펜"],["Nanum Brush Script","나눔손글씨 붓"],["Gaegu","개구"],["Hi Melody","하이멜로디"],["Gamja Flower","감자꽃"],["Poor Story","푸어스토리"],["Single Day","싱글데이"],["East Sea Dokdo","동해독도"],["Yeon Sung","연성"],["Cute Font","귀여운체"]]],
+  ["제목 · 장식", [["Jua","주아"],["Do Hyeon","도현"],["Black Han Sans","검은고딕"],["Gugi","구기"],["Dongle","동글"],["Stylish","스타일리시"]]],
+];
+const GENERIC = {"명조 · 바탕":"serif","고딕 · 돋움":"sans-serif","손글씨":"cursive","제목 · 장식":"sans-serif"};
+const fontGroupOf = f => (FONTS.find(([,l]) => l.some(([n]) => n===f)) || ["명조 · 바탕"])[0];
+const stack = f => `"${f}", ${GENERIC[fontGroupOf(f)]}`;
+
+const SAMPLES = [
+  { title:"예시 · 1장 소금창고", font:"Gowun Batang", size:17, lh:1.9,
+    text:"새벽 네 시, 소금창고의 문은 늘 반쯤 열려 있었다.\n\n해원은 젖은 장화를 벗어 문턱에 세워 두고 안으로 들어갔다. 쌓아 둔 소금 자루 사이로 바다 냄새가 낮게 깔렸다. 아버지가 마지막으로 이 창고에 들른 날도 이런 냄새였을 것이다.\n\n“누구 있어요?”\n\n대답 대신 천장에서 무언가 바스락거렸다. 해원은 손전등을 들어 올렸다. 빛이 닿은 들보 위에 작은 공책 한 권이 끼워져 있었다. 표지에는 아버지의 글씨로 날짜 하나만 적혀 있었다. 1998년 7월 14일.\n\n그날은 해원이 태어나기 사흘 전이었다." },
+  { title:"예시 · 인물 노트", font:"Gowun Batang", size:17, lh:1.9,
+    text:"■ 한해원 (29)\n- 서울에서 번역 일을 하다 아버지 장례 때문에 염전 마을로 돌아옴\n- 말수가 적고, 불안하면 숫자를 센다\n- 원하는 것: 아버지가 왜 염전을 팔지 않았는지 알고 싶다\n\n■ 도 선장 (63)\n- 아버지의 오랜 친구. 공책의 존재를 이미 알고 있다\n- 해원에게 친절하지만 7월 이야기만 나오면 자리를 피함\n\n■ 떡밥 정리\n- 1998.7.14 → 태풍 '예니' 상륙일?\n- 창고 열쇠는 원래 두 개였다\n- 3장에서 공책 첫 장 공개" },
+];
+
+let state = loadState();
+const desk = document.getElementById('desk');
+
+function loadState(){
+  try{
+    const s = JSON.parse(localStorage.getItem('dukan-desk-v1'));
+    if (s && Array.isArray(s.panes) && s.panes.length===2){
+      // 예전 기본값(손글씨 22px, 줄간격 1.6)을 그대로 쓰던 칸은 새 기본값(고운바탕)으로 맞춥니다
+      s.panes.forEach(p => { if (p.font==="Nanum Pen Script" && p.size===22 && p.lh===1.6){ p.font="Gowun Batang"; p.size=17; p.lh=1.9; } });
+      return s;
+    }
+  }catch(e){}
+  return { panes: SAMPLES.map(p => ({...p})), view:"both", paper:"theme" };
+}
+let saveTimer;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try{ localStorage.setItem('dukan-desk-v1', JSON.stringify(state)); }catch(e){} }, 300);
+}
+
+function fontOptions(sel){
+  return FONTS.map(([g, list]) =>
+    `<optgroup label="${g}">` + list.map(([n,k]) =>
+      `<option value="${n}" style="font-family:${stack(n).replace(/"/g,"'")}" ${n===sel?'selected':''}>${k}</option>`).join('') + `</optgroup>`
+  ).join('');
+}
+
+function countStats(t){
+  const all = t.replace(/\n/g,'').length;
+  const noSp = t.replace(/\s/g,'').length;
+  // 200자 원고지: 문단마다 줄이 새로 시작하고 첫 칸을 비우므로 문단 단위로 칸 수를 셉니다
+  const COLS = 20; let rows = 0;
+  t.split('\n').forEach(p => { const cells = p.length ? p.length + 1 : 0; rows += Math.max(1, Math.ceil(cells / COLS)); });
+  const sheets = t.trim() ? (rows / 10).toFixed(1) : '0';
+  return { all, noSp, sheets };
+}
+
+function render(){
+  desk.dataset.view = state.view;
+  desk.dataset.paper = state.paper;
+  desk.innerHTML = state.panes.map((p,i) => `
+    <section class="pane" data-i="${i}" aria-label="${i?'오른쪽':'왼쪽'} 원고">
+      <div class="pane-tools">
+        <span class="pane-tag">${i?'B':'A'}</span>
+        <select class="font" id="font${i}" aria-label="폰트">${fontOptions(p.font)}</select>
+        <label class="size">크기 <input type="range" id="size${i}" min="12" max="34" step="1" value="${p.size}"><output id="sizeOut${i}">${p.size}px</output></label>
+        <select id="lh${i}" aria-label="줄 간격">${[1.5,1.6,1.8,1.9,2.0,2.2,2.4].map(v=>`<option value="${v}" ${v==p.lh?'selected':''}>줄간격 ${v}</option>`).join('')}</select>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="copy${i}">본문 복사</button>
+        <button type="button" class="btn" id="clear${i}">비우기</button>
+      </div>
+      <div class="sheet">
+        <input class="title" id="title${i}" type="text" placeholder="제목 또는 장 이름" value="${escapeAttr(p.title)}">
+        <textarea id="text${i}" spellcheck="false" placeholder="여기에 쓰거나 붙여넣으세요 (Ctrl+V / ⌘V)">${escapeHtml(p.text)}</textarea>
+      </div>
+      <div class="stats" id="stats${i}"></div>
+    </section>`).join('');
+  state.panes.forEach((_,i) => { applyStyle(i); updateStats(i); bindPane(i); });
+  document.querySelectorAll('#viewSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v===state.view));
+  document.querySelectorAll('#paperSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.p===state.paper));
+}
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+function applyStyle(i){
+  const p = state.panes[i];
+  const ta = document.getElementById('text'+i), ti = document.getElementById('title'+i);
+  ta.style.fontFamily = ti.style.fontFamily = stack(p.font);
+  ta.style.fontSize = p.size + 'px';
+  ta.style.lineHeight = p.lh;
+  ti.style.fontSize = Math.round(p.size * 1.35) + 'px';
+}
+function updateStats(i){
+  const s = countStats(state.panes[i].text);
+  document.getElementById('stats'+i).innerHTML =
+    `<span>공백 포함 <b>${s.all.toLocaleString()}</b>자</span><span>공백 제외 <b>${s.noSp.toLocaleString()}</b>자</span><span>200자 원고지 약 <b>${s.sheets}</b>매</span>`;
+}
+
+function bindPane(i){
+  const p = state.panes[i];
+  const $ = id => document.getElementById(id+i);
+  $('text').addEventListener('input', e => { p.text = e.target.value; updateStats(i); save(); });
+  $('title').addEventListener('input', e => { p.title = e.target.value; save(); });
+  $('font').addEventListener('change', e => { p.font = e.target.value; applyStyle(i); save(); });
+  $('size').addEventListener('input', e => { p.size = +e.target.value; $('sizeOut').textContent = p.size+'px'; applyStyle(i); save(); });
+  $('lh').addEventListener('change', e => { p.lh = +e.target.value; applyStyle(i); save(); });
+  $('copy').addEventListener('click', () => {
+    const ta = $('text');
+    const txt = (p.title ? p.title + '\n\n' : '') + p.text;
+    const fallback = () => { ta.focus(); ta.select(); toast('본문을 선택했어요. Ctrl+C로 복사하세요'); };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(() => toast('제목과 본문을 복사했어요'), fallback);
+    } else fallback();
+  });
+  let armed = null;
+  $('clear').addEventListener('click', e => {
+    const b = e.currentTarget;
+    if (!armed){
+      b.textContent = '한 번 더 누르면 지워요'; b.classList.add('warn');
+      armed = setTimeout(() => { armed=null; b.textContent='비우기'; b.classList.remove('warn'); }, 3000);
+      return;
+    }
+    clearTimeout(armed); armed=null;
+    p.text=''; p.title='';
+    $('text').value=''; $('title').value='';
+    b.textContent='비우기'; b.classList.remove('warn');
+    updateStats(i); save(); $('text').focus();
+  });
+}
+
+document.getElementById('viewSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  state.view = b.dataset.v; save(); render();
+});
+document.getElementById('paperSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  state.paper = b.dataset.p; save();
+  desk.dataset.paper = state.paper;
+  document.querySelectorAll('#paperSeg button').forEach(x => x.setAttribute('aria-pressed', x===b));
+});
+document.getElementById('swapBtn').addEventListener('click', () => {
+  state.panes.reverse(); save(); render(); toast('두 원고의 자리를 바꿨어요');
+});
+
+let toastEl;
+function toast(msg){
+  if (!toastEl){ toastEl = document.createElement('div'); toastEl.className='toast'; toastEl.setAttribute('role','status'); document.body.appendChild(toastEl); }
+  toastEl.textContent = msg; toastEl.hidden = false;
+  clearTimeout(toastEl._t); toastEl._t = setTimeout(() => toastEl.hidden = true, 2200);
+}
+
+/* ---------- 이미지 만들기 ---------- */
+const modal = document.getElementById('modal');
+let target = "0", lastBlob = null, lastUrl = null;
+
+document.getElementById('imgBtn').addEventListener('click', () => {
+  target = state.view === 'right' ? "1" : state.view === 'left' ? "0" : "both";
+  syncTarget(); modal.hidden = false; buildImage();
+});
+document.getElementById('closeBtn').addEventListener('click', () => modal.hidden = true);
+modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) modal.hidden = true; });
+document.getElementById('targetSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return; target = b.dataset.t; syncTarget(); buildImage();
+});
+document.getElementById('footChk').addEventListener('change', buildImage);
+function syncTarget(){ document.querySelectorAll('#targetSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.t===target)); }
+
+function wrapText(ctx, text, maxW){
+  const out = [];
+  for (const para of text.split('\n')){
+    if (para === ''){ out.push(''); continue; }
+    let line = '';
+    for (const ch of para){
+      const test = line + ch;
+      if (ctx.measureText(test).width > maxW && line.length){
+        if (ch === ' '){ out.push(line); line=''; continue; }
+        const sp = line.lastIndexOf(' ');
+        if (sp > 0 && /[^\s]/.test(ch)){ out.push(line.slice(0, sp)); line = line.slice(sp+1) + ch; }
+        else { out.push(line); line = ch; }
+        // 남은 줄이 여전히 넘치면 글자 단위로 자르기
+        while (ctx.measureText(line).width > maxW && line.length > 1){
+          let k = line.length - 1; while (k > 1 && ctx.measureText(line.slice(0,k)).width > maxW) k--;
+          out.push(line.slice(0,k)); line = line.slice(k);
+        }
+      } else line = test;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+function paperColors(){
+  const sheet = document.querySelector('.sheet');
+  const cs = getComputedStyle(sheet);
+  return { bg: cs.backgroundColor, ink: cs.color, desk: getComputedStyle(document.body).backgroundColor };
+}
+
+async function buildImage(){
+  const prev = document.getElementById('preview'), msg = document.getElementById('imgMsg');
+  msg.textContent = '';
+  prev.innerHTML = '<p class="hint">만드는 중…</p>';
+  const idx = target === 'both' ? [0,1] : [+target];
+  const showFoot = document.getElementById('footChk').checked;
+  const W = 760, PAD = 72, GAP = 36;
+  const meas = document.createElement('canvas').getContext('2d');
+
+  const pages = [];
+  for (const i of idx){
+    const p = state.panes[i];
+    const fam = stack(p.font);
+    const tSize = Math.round(p.size * 1.45);
+    try{
+      await Promise.all([
+        document.fonts.load(`${p.size}px "${p.font}"`, p.text.slice(0,200) || '가'),
+        document.fonts.load(`700 ${tSize}px "${p.font}"`, p.title || '가'),
+      ]);
+    }catch(e){}
+    meas.font = `700 ${tSize}px ${fam}`;
+    const tLines = p.title.trim() ? wrapText(meas, p.title.trim(), W - PAD*2) : [];
+    meas.font = `${p.size}px ${fam}`;
+    const bLines = wrapText(meas, p.text.replace(/\s+$/,''), W - PAD*2);
+    const lineH = p.size * p.lh, tLineH = tSize * 1.35;
+    const h = PAD + (tLines.length ? tLines.length*tLineH + 30 : 0) + bLines.length*lineH + (showFoot ? 64 : 12) + PAD;
+    pages.push({ p, fam, tSize, tLines, bLines, lineH, tLineH, h: Math.ceil(h) });
+  }
+  const both = pages.length > 1;
+  const contentH = Math.max(...pages.map(x => x.h));
+  const totalW = both ? W*2 + GAP*3 : W;
+  const totalH = both ? contentH + GAP*2 : contentH;
+  let S = 2;
+  if (totalH * S > 30000) S = Math.max(0.6, 30000 / totalH);
+
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(totalW * S); cv.height = Math.round(totalH * S);
+  const ctx = cv.getContext('2d');
+  ctx.scale(S, S);
+  const col = paperColors();
+  if (both){ ctx.fillStyle = col.desk; ctx.fillRect(0,0,totalW,totalH); }
+
+  pages.forEach((pg, n) => {
+    const x0 = both ? GAP + n*(W+GAP) : 0, y0 = both ? GAP : 0;
+    const h = both ? contentH : pg.h;
+    if (both){ ctx.save(); ctx.shadowColor='rgba(0,0,0,.18)'; ctx.shadowBlur=24; ctx.shadowOffsetY=8; }
+    ctx.fillStyle = col.bg; ctx.fillRect(x0, y0, W, h);
+    if (both) ctx.restore();
+    ctx.fillStyle = col.ink; ctx.textBaseline = 'alphabetic';
+    let y = y0 + PAD;
+    if (pg.tLines.length){
+      ctx.font = `700 ${pg.tSize}px ${pg.fam}`;
+      pg.tLines.forEach(l => { y += pg.tLineH; ctx.fillText(l, x0+PAD, y - pg.tLineH*0.22); });
+      y += 12;
+      ctx.globalAlpha = .25; ctx.fillRect(x0+PAD, y, 48, 2); ctx.globalAlpha = 1;
+      y += 18;
+    }
+    ctx.font = `${pg.p.size}px ${pg.fam}`;
+    pg.bLines.forEach(l => { y += pg.lineH; ctx.fillText(l, x0+PAD, y - (pg.lineH - pg.p.size)/2 - pg.p.size*0.18); });
+    if (showFoot){
+      const s = countStats(pg.p.text);
+      ctx.font = `13px "IBM Plex Sans KR", sans-serif`;
+      ctx.globalAlpha = .5;
+      ctx.fillText(`공백 포함 ${s.all.toLocaleString()}자 · 원고지 약 ${s.sheets}매`, x0+PAD, y0 + h - PAD + 26);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  cv.toBlob(blob => {
+    if (!blob){ prev.innerHTML = '<p class="hint">이미지를 만들지 못했어요. 글이 너무 길면 한 칸씩 저장해 보세요.</p>'; return; }
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastBlob = blob; lastUrl = URL.createObjectURL(blob);
+    const img = new Image(); img.src = lastUrl; img.alt = '원고 이미지 미리보기';
+    prev.innerHTML = ''; prev.appendChild(img);
+  }, 'image/png');
+}
+
+document.getElementById('copyImgBtn').addEventListener('click', () => {
+  const msg = document.getElementById('imgMsg');
+  if (!lastBlob){ msg.textContent = '이미지가 아직 준비되지 않았어요.'; return; }
+  try{
+    navigator.clipboard.write([new ClipboardItem({'image/png': lastBlob})])
+      .then(() => msg.textContent = '이미지를 복사했어요. 메신저나 문서에 붙여넣으세요.')
+      .catch(() => msg.textContent = '여기서는 복사가 막혀 있어요. 이미지를 우클릭하거나 길게 눌러 저장하세요.');
+  }catch(e){ msg.textContent = '여기서는 복사가 막혀 있어요. 이미지를 우클릭하거나 길게 눌러 저장하세요.'; }
+});
+
+render();
+</script>
+</body>
+</html>
