@@ -170,6 +170,7 @@ select.font{max-width:150px}
 .ed .pic img.orig{max-height:80vh}
 .prose img.picked{outline:3px solid var(--accent); outline-offset:2px}
 .indent p:not(.pic):not(.divider):not([style*="center"]){text-indent:1em}
+.justify{text-align:justify}
 
 ::highlight(find){background-color:#FFE08A; color:#1B1B1B}
 ::highlight(findcur){background-color:#FFAA3B; color:#1B1B1B}
@@ -364,6 +365,7 @@ body.focus{padding-block:42px 12px}
 </div>
 
 <div class="pop" id="setPop" hidden role="dialog" aria-label="쓰기 설정">
+  <label class="sw"><span>양쪽 정렬<small>글줄 양 끝을 반듯하게 맞춰요. 이미지 저장에도 적용</small></span><input type="checkbox" data-opt="justify"></label>
   <label class="sw"><span>따옴표 짝 맞추기<small>“ ‘ 「 『 ( 를 치면 닫는 짝을 함께 넣어요</small></span><input type="checkbox" data-opt="pairs"></label>
   <label class="sw"><span>... → ⋯ 자동 변환<small>마침표 세 개를 ⋯ 로 바꿔요</small></span><input type="checkbox" data-opt="ellipsis"></label>
   <label class="sw"><span>첫 줄 들여쓰기<small>문단 첫 줄을 한 칸 들여요. 이미지 저장에도 적용</small></span><input type="checkbox" data-opt="indent"></label>
@@ -533,7 +535,35 @@ setInterval(() => {
 }, 60*1000);
 
 /* ================= 글자수 ================= */
-function plainText(el){ return (el.innerText || '').replace(/\n{3,}/g,'\n\n').replace(/\s+$/,''); }
+/* 본문 → 글자. 문단 하나는 줄바꿈 한 번, 빈 문단은 빈 줄 하나로 셉니다 */
+const BLOCK_RE = /^(P|DIV|BLOCKQUOTE|LI|H[1-6]|UL|OL)$/;
+function serialize(root){
+  const lines = []; let buf = null;
+  const inlineText = node => {
+    let t = '';
+    node.childNodes.forEach(c => {
+      if (c.nodeType === 3) t += c.data;
+      else if (c.nodeType === 1){ if (c.tagName === 'BR') t += '\n'; else if (c.tagName !== 'IMG') t += inlineText(c); }
+    });
+    return t;
+  };
+  const flush = () => { if (buf !== null){ lines.push(buf.replace(/\n$/, '')); buf = null; } };
+  const walk = node => {
+    node.childNodes.forEach(c => {
+      if (c.nodeType === 1 && c.tagName === 'HR'){ flush(); lines.push('───'); }
+      else if (c.nodeType === 1 && BLOCK_RE.test(c.tagName)){
+        flush();
+        if (c.classList.contains('pic') && !c.textContent.trim()) return;
+        if ([...c.children].some(k => BLOCK_RE.test(k.tagName) || k.tagName === 'HR')) walk(c);
+        else lines.push(inlineText(c).replace(/\n$/, ''));
+      }
+      else if (c.nodeType === 3 || c.nodeType === 1){ buf = (buf || '') + (c.nodeType === 3 ? c.data : (c.tagName === 'BR' ? '\n' : inlineText(c))); }
+    });
+  };
+  walk(root); flush();
+  return lines.join('\n').replace(/^\n+|\s+$/g, '');
+}
+function plainText(el){ return serialize(el); }
 function htmlToText(html){
   const tmp = document.createElement('div'); tmp.innerHTML = html;
   tmp.style.cssText = 'position:fixed;left:-9999px;top:0;width:600px;white-space:pre-wrap';
@@ -790,7 +820,10 @@ function runCmd(i, cmd, val){
       break;
     case 'center': {
       const b = currentBlock(ed);
-      document.execCommand(b && getComputedStyle(b).textAlign === 'center' ? 'justifyLeft' : 'justifyCenter'); break;
+      if (b && getComputedStyle(b).textAlign === 'center' && b.style){
+        b.style.textAlign = ''; if (!b.getAttribute('style')) b.removeAttribute('style');   // 원래 정렬(양쪽/왼쪽)로
+      } else document.execCommand('justifyCenter');
+      break;
     }
     case 'quoteblock': {
       const b = currentBlock(ed);
@@ -952,6 +985,17 @@ function bindPane(i){
     if (meta.ellipsis) t = t.replace(/\.{3}/g, '⋯');
     if (t) document.execCommand('insertText', false, t);
   });
+  const copyOut = (e, cut) => {
+    const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed || !e.clipboardData) return;
+    const box = document.createElement('div'); box.appendChild(sel.getRangeAt(0).cloneContents());
+    box.querySelectorAll('.cur,.picked').forEach(n => n.classList.remove('cur','picked'));
+    e.clipboardData.setData('text/plain', serialize(box));
+    e.clipboardData.setData('text/html', box.innerHTML);
+    e.preventDefault();
+    if (cut) document.execCommand('delete');
+  };
+  ed.addEventListener('copy', e => copyOut(e, false));
+  ed.addEventListener('cut', e => copyOut(e, true));
   ed.addEventListener('drop', e => {
     const fs = e.dataTransfer ? [...e.dataTransfer.files].filter(f => f.type.startsWith('image/')) : [];
     if (fs.length){ e.preventDefault(); remember(i); insertImageFiles(i, fs); }
@@ -1078,11 +1122,12 @@ $id('newDocBtn').addEventListener('click', () => {
   renamingId = d.id; renderLib();
 });
 function docToHtml(d){
-  const ind = meta.indent ? ' class="indent"' : '';
+  const cls = [meta.indent && 'indent', meta.justify && 'justify'].filter(Boolean).join(' ');
+  const ind = cls ? ` class="${cls}"` : '';
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(d.name)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(d.font).replace(/%20/g,'+')}&display=swap">
 <style>body{margin:0;background:#F5F0E1;color:#2B2722}main{max-width:720px;margin:0 auto;padding:56px 24px;font-family:${stack(d.font)};font-size:${d.size}px;line-height:${d.lh};white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere;--rule:rgba(43,39,34,.24);--tint:rgba(120,90,40,.06)}
-p,div{margin:0}blockquote{margin:.6em 0;padding:.35em 0 .35em 1em;border-left:3px solid var(--rule)}.letter{margin:.8em 0;padding:1em 1.2em;border:1px solid var(--rule);background:var(--tint)}.divider{text-align:center;letter-spacing:.4em;margin:1em 0;opacity:.7}hr{border:0;border-top:1px solid var(--rule);width:40%;margin:1.4em auto}.faint{opacity:.5}.small{font-size:.82em}.big{font-size:1.3em}.pic{text-align:center;margin:.8em 0}.pic img{max-width:100%}.w100{width:100%}.w60{width:60%}.w35{width:35%}.orig{width:auto;max-width:100%}.indent p:not(.pic):not(.divider):not([style*="center"]){text-indent:1em}</style></head>
+p,div{margin:0}blockquote{margin:.6em 0;padding:.35em 0 .35em 1em;border-left:3px solid var(--rule)}.letter{margin:.8em 0;padding:1em 1.2em;border:1px solid var(--rule);background:var(--tint)}.divider{text-align:center;letter-spacing:.4em;margin:1em 0;opacity:.7}hr{border:0;border-top:1px solid var(--rule);width:40%;margin:1.4em auto}.faint{opacity:.5}.small{font-size:.82em}.big{font-size:1.3em}.pic{text-align:center;margin:.8em 0}.pic img{max-width:100%}.w100{width:100%}.w60{width:60%}.w35{width:35%}.orig{width:auto;max-width:100%}.indent p:not(.pic):not(.divider):not([style*="center"]){text-indent:1em}.justify{text-align:justify}</style></head>
 <body><main${ind}>${d.html}</main></body></html>`;
 }
 let dlApi;
@@ -1471,6 +1516,7 @@ function applyChrome(){
   [0,1].forEach(i => {
     const ed = edOf(i); if (!ed) return;
     ed.classList.toggle('indent', !!meta.indent);
+    ed.classList.toggle('justify', !!meta.justify);
     ed.classList.toggle('tw', !!meta.typewriter);
     ed.classList.toggle('dim', !!meta.dim);
     if (meta.dim) markCurrent(i); else ed.querySelectorAll('.cur').forEach(n => n.classList.remove('cur'));
@@ -1531,7 +1577,7 @@ async function buildImage(){
   for (const i of idx){
     const d = docOf(i), ed = edOf(i);
     const page = document.createElement('div');
-    page.className = 'page prose' + (meta.indent ? ' indent' : '');
+    page.className = 'page prose' + (meta.indent ? ' indent' : '') + (meta.justify ? ' justify' : '');
     page.style.cssText = `background:${cs.backgroundColor};color:${cs.color};font-family:${stack(d.font)};font-size:${d.size}px;line-height:${d.lh};--rule:${cs.getPropertyValue('--rule')};--tint:${cs.getPropertyValue('--tint')}`;
     page.innerHTML = cleanHtml(ed);
     if (showFoot){
@@ -1597,6 +1643,7 @@ async function init(){
     dirty.add('meta'); dirty.add('notes');
   }
   meta.daily = meta.daily || {}; meta.lastSnap = meta.lastSnap || {};
+  if (meta.justify === undefined){ meta.justify = true; dirty.add('meta'); }
   if (!meta.order.length){ const d = newDoc('원고 A'); docs[d.id] = d; meta.order.push(d.id); dirty.add('doc:'+d.id); }
   meta.panes = (meta.panes || []).filter(id => docs[id]);
   while (meta.panes.length < 2){
